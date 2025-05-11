@@ -20,6 +20,7 @@ use crate::model::playable::Playable;
 use crate::model::playlist::Playlist;
 use crate::model::show::Show;
 use crate::model::track::Track;
+use crate::model::verified_playable::VerifiedPlayable;
 use crate::queue::RepeatSetting;
 use crate::spotify::UriType;
 use crate::spotify_url::SpotifyUrl;
@@ -399,7 +400,15 @@ impl MprisPlayer {
                         self.queue.clear();
                         let index = self.queue.append_next(
                             &t.iter()
-                                .map(|track| Playable::Track(track.clone()))
+                                .filter_map(|track| {
+                                    track
+                                        .clone()
+                                        .try_into()
+                                        .map_err(|_| {
+                                            log::debug!("Skipping unplayable track {:?}", track)
+                                        })
+                                        .ok()
+                                })
                                 .collect(),
                         );
                         self.queue.play(index, should_shuffle, should_shuffle)
@@ -408,9 +417,11 @@ impl MprisPlayer {
             }
             Some(UriType::Track) => {
                 if let Ok(t) = self.spotify.api.track(&id) {
-                    self.queue.clear();
-                    self.queue.append(Playable::Track(Track::from(&t)));
-                    self.queue.play(0, false, false)
+                    if let Ok(vp) = Track::from(&t).try_into() {
+                        self.queue.clear();
+                        self.queue.append(vp);
+                        self.queue.play(0, false, false)
+                    }
                 }
             }
             Some(UriType::Playlist) => {
@@ -418,9 +429,21 @@ impl MprisPlayer {
                     let mut playlist = Playlist::from(&p);
                     playlist.load_tracks(&self.spotify);
                     if let Some(tracks) = &playlist.tracks {
+                        let playable_tracks: Vec<VerifiedPlayable> = tracks
+                            .iter()
+                            .filter_map(|track| {
+                                track
+                                    .clone()
+                                    .try_into()
+                                    .map_err(|_| {
+                                        log::debug!("Skipping unplayable track {:?}", track)
+                                    })
+                                    .ok()
+                            })
+                            .collect();
                         let should_shuffle = self.queue.get_shuffle();
                         self.queue.clear();
-                        let index = self.queue.append_next(tracks);
+                        let index = self.queue.append_next(&playable_tracks);
                         self.queue.play(index, should_shuffle, should_shuffle)
                     }
                 }
@@ -436,9 +459,7 @@ impl MprisPlayer {
                         let mut ep = e.clone();
                         ep.reverse();
                         let index = self.queue.append_next(
-                            &ep.iter()
-                                .map(|episode| Playable::Episode(episode.clone()))
-                                .collect(),
+                            &ep.iter().map(|episode| episode.clone().into()).collect(),
                         );
                         self.queue.play(index, should_shuffle, should_shuffle)
                     }
@@ -447,7 +468,7 @@ impl MprisPlayer {
             Some(UriType::Episode) => {
                 if let Ok(e) = self.spotify.api.episode(&id) {
                     self.queue.clear();
-                    self.queue.append(Playable::Episode(Episode::from(&e)));
+                    self.queue.append(Episode::from(&e).into());
                     self.queue.play(0, false, false)
                 }
             }
@@ -457,7 +478,15 @@ impl MprisPlayer {
                     self.queue.clear();
                     let index = self.queue.append_next(
                         &a.iter()
-                            .map(|track| Playable::Track(track.clone()))
+                            .filter_map(|track| {
+                                track
+                                    .clone()
+                                    .try_into()
+                                    .map_err(|_| {
+                                        log::debug!("Skipping unplayable track: {:?}", track)
+                                    })
+                                    .ok()
+                            })
                             .collect(),
                     );
                     self.queue.play(index, should_shuffle, should_shuffle)

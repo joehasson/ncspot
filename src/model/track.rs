@@ -235,16 +235,28 @@ impl ListItem for Track {
     }
 
     fn play(&mut self, queue: &Queue) {
-        let index = queue.append_next(&vec![Playable::Track(self.clone())]);
-        queue.play(index, true, false);
+        if let Ok(verified_playable) = self.clone().try_into() {
+            let index = queue.append_next(&vec![verified_playable]);
+            queue.play(index, true, false);
+        } else {
+            log::debug!("Skipping unplayable track: {:?}", self);
+        }
     }
 
     fn play_next(&mut self, queue: &Queue) {
-        queue.insert_after_current(Playable::Track(self.clone()));
+        if let Ok(verified_playable) = self.clone().try_into() {
+            queue.insert_after_current(verified_playable);
+        } else {
+            log::debug!("Skipping unplayable track: {:?}", self);
+        }
     }
 
     fn queue(&mut self, queue: &Queue) {
-        queue.append(Playable::Track(self.clone()));
+        if let Ok(verified_playable) = self.clone().try_into() {
+            queue.append(verified_playable);
+        } else {
+            log::debug!("Skipping unplayable track: {:?}", self);
+        }
     }
 
     fn toggle_saved(&mut self, library: &Library) {

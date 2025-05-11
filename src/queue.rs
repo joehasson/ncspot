@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::ops::Deref;
 use std::sync::{Arc, RwLock};
 
 use log::{debug, info};
@@ -10,7 +11,7 @@ use strum_macros::Display;
 
 use crate::config::Config;
 use crate::library::Library;
-use crate::model::playable::Playable;
+use crate::model::{playable::Playable, verified_playable::VerifiedPlayable};
 use crate::spotify::PlayerEvent;
 use crate::spotify::Spotify;
 
@@ -33,12 +34,12 @@ pub enum QueueEvent {
     PreloadTrackRequest,
 }
 
-/// The queue determines the playback order of [Playable] items, and is also used to control
+/// The queue determines the playback order of [VerifiedPlayable] items, and is also used to control
 /// playback itself.
 pub struct Queue {
     /// The internal data, which doesn't change with shuffle or repeat. This is
     /// the raw data only.
-    pub queue: Arc<RwLock<Vec<Playable>>>,
+    pub queue: Arc<RwLock<Vec<VerifiedPlayable>>>,
     /// The playback order of the queue, as indices into `self.queue`.
     random_order: RwLock<Option<Vec<usize>>>,
     current_track: RwLock<Option<usize>>,
@@ -114,7 +115,7 @@ impl Queue {
     /// The currently playing item from `self.queue`.
     pub fn get_current(&self) -> Option<Playable> {
         self.get_current_index()
-            .map(|index| self.queue.read().unwrap()[index].clone())
+            .map(|index| self.queue.read().unwrap()[index].deref().clone())
     }
 
     /// The index of the currently playing item from `self.queue`.
@@ -124,7 +125,7 @@ impl Queue {
 
     /// Insert `track` as the item that should logically follow the currently
     /// playing item, taking into account shuffle status.
-    pub fn insert_after_current(&self, track: Playable) {
+    pub fn insert_after_current(&self, track: VerifiedPlayable) {
         if let Some(index) = self.get_current_index() {
             let mut random_order = self.random_order.write().unwrap();
             if let Some(order) = random_order.as_mut() {
@@ -146,7 +147,7 @@ impl Queue {
     }
 
     /// Add `track` to the end of the queue.
-    pub fn append(&self, track: Playable) {
+    pub fn append(&self, track: VerifiedPlayable) {
         let mut random_order = self.random_order.write().unwrap();
         if let Some(order) = random_order.as_mut() {
             let index = order.len().saturating_sub(1);
@@ -159,7 +160,7 @@ impl Queue {
 
     /// Append `tracks` after the currently playing item, taking into account
     /// shuffle status. Returns the first index(in `self.queue`) of added items.
-    pub fn append_next(&self, tracks: &Vec<Playable>) -> usize {
+    pub fn append_next(&self, tracks: &Vec<VerifiedPlayable>) -> usize {
         let mut q = self.queue.write().unwrap();
 
         {

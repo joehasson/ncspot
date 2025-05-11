@@ -22,6 +22,7 @@ use crate::model::playable::Playable;
 use crate::model::playlist::Playlist;
 use crate::model::show::Show;
 use crate::model::track::Track;
+use crate::model::verified_playable::VerifiedPlayable;
 use crate::queue::Queue;
 #[cfg(feature = "share_clipboard")]
 use crate::sharing::{read_share, write_share};
@@ -165,15 +166,38 @@ impl<I: ListItem + Clone> ListView<I> {
     fn attempt_play_all_tracks(&self) -> bool {
         let content = self.content.read().unwrap();
         let any = &(*content) as &dyn std::any::Any;
+        let verified_playables = any.downcast_ref::<Vec<VerifiedPlayable>>();
         let playables = any.downcast_ref::<Vec<Playable>>();
         let tracks = any.downcast_ref::<Vec<Track>>().map(|t| {
             t.iter()
                 .map(|t| Playable::Track(t.clone()))
                 .collect::<Vec<Playable>>()
         });
-        if let Some(tracks) = playables.or(tracks.as_ref()) {
-            let index = self.queue.append_next(tracks);
-            self.queue.play(index + self.selected, true, false);
+
+        let mut to_append = vec![];
+        let mut next_track_offset = None;
+        if let Some(verified_playables) = verified_playables {
+            to_append = verified_playables.clone();
+            next_track_offset = Some(self.selected);
+        } else if let Some(tracks) = playables.or(tracks.as_ref()) {
+            for (i, track) in tracks.iter().enumerate() {
+                if let Ok(vp) = track.clone().try_into() {
+                    to_append.push(vp);
+                    // Play the first track which comes at or after the selected index in the list view
+                    if next_track_offset.is_none() && i >= self.selected {
+                        next_track_offset = Some(to_append.len() - 1);
+                    }
+                } else {
+                    log::debug!("Skipping unplayable track {:?}", track)
+                }
+            }
+        } else {
+            return false;
+        }
+
+        let index = self.queue.append_next(&to_append);
+        if let Some(offset) = next_track_offset {
+            self.queue.play(index + offset, true, false);
             true
         } else {
             false

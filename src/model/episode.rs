@@ -1,5 +1,4 @@
 use crate::library::Library;
-use crate::model::playable::Playable;
 use crate::queue::Queue;
 use crate::traits::{ListItem, ViewExt};
 use crate::utils::ms_to_hms;
@@ -83,16 +82,16 @@ impl ListItem for Episode {
     }
 
     fn play(&mut self, queue: &Queue) {
-        let index = queue.append_next(&vec![Playable::Episode(self.clone())]);
+        let index = queue.append_next(&vec![self.clone().into()]);
         queue.play(index, true, false);
     }
 
     fn play_next(&mut self, queue: &Queue) {
-        queue.insert_after_current(Playable::Episode(self.clone()));
+        queue.insert_after_current(self.clone().into());
     }
 
     fn queue(&mut self, queue: &Queue) {
-        queue.append(Playable::Episode(self.clone()));
+        queue.append(self.clone().into());
     }
 
     fn toggle_saved(&mut self, _library: &Library) {}

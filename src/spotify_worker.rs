@@ -182,7 +182,7 @@ impl Worker {
                             PlayerStatus::Stopped => PlayerEvent::Stopped,
                         };
                         self.events.send(Event::Player(event));
-                    }
+                    },
                     Some(event) => {
                         debug!("Unhandled player event: {event:?}");
                     }

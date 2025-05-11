@@ -10,6 +10,7 @@ use rspotify::model::playlist::{FullPlaylist, SimplifiedPlaylist};
 
 use crate::model::playable::Playable;
 use crate::model::track::Track;
+use crate::model::verified_playable::VerifiedPlayable;
 use crate::queue::Queue;
 use crate::spotify::Spotify;
 use crate::traits::{IntoBoxedViewExt, ListItem, ViewExt};
@@ -229,7 +230,17 @@ impl ListItem for Playlist {
         self.load_tracks(&queue.get_spotify());
 
         if let Some(tracks) = &self.tracks {
-            let index = queue.append_next(tracks);
+            let playable_tracks: Vec<VerifiedPlayable> = tracks
+                .iter()
+                .filter_map(|track| {
+                    track
+                        .clone()
+                        .try_into()
+                        .map_err(|_| debug!("Skipping unplayable track {:?}", track))
+                        .ok()
+                })
+                .collect();
+            let index = queue.append_next(&playable_tracks);
             queue.play(index, true, true);
         }
     }
@@ -239,7 +250,11 @@ impl ListItem for Playlist {
 
         if let Some(tracks) = self.tracks.as_ref() {
             for track in tracks.iter().rev() {
-                queue.insert_after_current(track.clone());
+                if let Ok(verified_playable) = track.clone().try_into() {
+                    queue.insert_after_current(verified_playable);
+                } else {
+                    debug!("Skipping unplayable track {:?}", track)
+                }
             }
         }
     }
@@ -249,7 +264,11 @@ impl ListItem for Playlist {
 
         if let Some(tracks) = self.tracks.as_ref() {
             for track in tracks.iter() {
-                queue.append(track.clone());
+                if let Ok(verified_playable) = track.clone().try_into() {
+                    queue.append(verified_playable);
+                } else {
+                    debug!("Skipping unplayable track {:?}", track)
+                }
             }
         }
     }

@@ -6,3 +6,4 @@ pub mod playable;
 pub mod playlist;
 pub mod show;
 pub mod track;
+pub mod verified_playable;

@@ -10,7 +10,7 @@ use ncspot::{CONFIGURATION_FILE_NAME, USER_STATE_FILE_NAME};
 use platform_dirs::AppDirs;
 
 use crate::command::{SortDirection, SortKey};
-use crate::model::playable::Playable;
+use crate::model::verified_playable::VerifiedPlayable;
 use crate::queue;
 use crate::serialization::{CBOR, Serializer, TOML};
 
@@ -140,7 +140,7 @@ pub struct QueueState {
     pub current_track: Option<usize>,
     pub random_order: Option<Vec<usize>>,
     pub track_progress: std::time::Duration,
-    pub queue: Vec<Playable>,
+    pub queue: Vec<VerifiedPlayable>,
 }
 
 /// Runtime state that should be persisted accross sessions.

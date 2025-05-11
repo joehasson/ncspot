@@ -9,8 +9,8 @@ use rspotify::model::album::{FullAlbum, SavedAlbum, SimplifiedAlbum};
 
 use crate::library::Library;
 use crate::model::artist::Artist;
-use crate::model::playable::Playable;
 use crate::model::track::Track;
+use crate::model::verified_playable::VerifiedPlayable;
 use crate::queue::Queue;
 use crate::spotify::Spotify;
 use crate::traits::{IntoBoxedViewExt, ListItem, ViewExt};
@@ -193,9 +193,15 @@ impl ListItem for Album {
         self.load_all_tracks(queue.get_spotify());
 
         if let Some(tracks) = self.tracks.as_ref() {
-            let tracks: Vec<Playable> = tracks
+            let tracks: Vec<VerifiedPlayable> = tracks
                 .iter()
-                .map(|track| Playable::Track(track.clone()))
+                .filter_map(|track| {
+                    track
+                        .clone()
+                        .try_into()
+                        .map_err(|_| debug!("Skipping unplayable track: {:?}", track))
+                        .ok()
+                })
                 .collect();
             let index = queue.append_next(&tracks);
             queue.play(index, true, true);
@@ -207,7 +213,11 @@ impl ListItem for Album {
 
         if let Some(tracks) = self.tracks.as_ref() {
             for t in tracks.iter().rev() {
-                queue.insert_after_current(Playable::Track(t.clone()));
+                if let Ok(verified_playable) = t.clone().try_into() {
+                    queue.insert_after_current(verified_playable);
+                } else {
+                    debug!("Skipping unplayable track: {:?}", t)
+                }
             }
         }
     }
@@ -217,7 +227,11 @@ impl ListItem for Album {
 
         if let Some(tracks) = self.tracks.as_ref() {
             for t in tracks {
-                queue.append(Playable::Track(t.clone()));
+                if let Ok(verified_playable) = t.clone().try_into() {
+                    queue.append(verified_playable);
+                } else {
+                    debug!("Skipping unplayable track: {:?}", t)
+                }
             }
         }
     }

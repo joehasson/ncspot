@@ -1,6 +1,5 @@
 use crate::library::Library;
 use crate::model::episode::Episode;
-use crate::model::playable::Playable;
 use crate::queue::Queue;
 use crate::spotify::Spotify;
 use crate::traits::{IntoBoxedViewExt, ListItem, ViewExt};
@@ -101,7 +100,7 @@ impl ListItem for Show {
             .as_ref()
             .unwrap_or(&Vec::new())
             .iter()
-            .map(|ep| Playable::Episode(ep.clone()))
+            .map(|ep| ep.clone().into())
             .collect();
 
         let index = queue.append_next(&playables);
@@ -113,7 +112,7 @@ impl ListItem for Show {
 
         if let Some(episodes) = self.episodes.as_ref() {
             for ep in episodes.iter().rev() {
-                queue.insert_after_current(Playable::Episode(ep.clone()));
+                queue.insert_after_current(ep.clone().into())
             }
         }
     }
@@ -122,7 +121,7 @@ impl ListItem for Show {
         self.load_all_episodes(queue.get_spotify());
 
         for ep in self.episodes.as_ref().unwrap_or(&Vec::new()) {
-            queue.append(Playable::Episode(ep.clone()));
+            queue.append(ep.clone().into())
         }
     }
 

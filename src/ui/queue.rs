@@ -10,13 +10,14 @@ use crate::command::{Command, MoveMode, ShiftMode};
 use crate::commands::CommandResult;
 use crate::library::Library;
 use crate::model::playable::Playable;
+use crate::model::verified_playable::VerifiedPlayable;
 use crate::queue::Queue;
 use crate::traits::ViewExt;
 use crate::ui::listview::ListView;
 use crate::ui::modal::Modal;
 
 pub struct QueueView {
-    list: ListView<Playable>,
+    list: ListView<VerifiedPlayable>,
     library: Arc<Library>,
     queue: Arc<Queue>,
 }
@@ -38,7 +39,13 @@ impl QueueView {
         library: Arc<Library>,
         id: Option<String>,
     ) {
-        let tracks = queue.queue.read().unwrap().clone();
+        let tracks: Vec<Playable> = queue
+            .queue
+            .read()
+            .unwrap()
+            .iter()
+            .map(|vp| (**vp).clone())
+            .collect();
         match id {
             Some(id) => {
                 library.overwrite_playlist(&id, &tracks);
@@ -85,7 +92,7 @@ impl QueueView {
 }
 
 impl ViewWrapper for QueueView {
-    wrap_impl!(self.list: ListView<Playable>);
+    wrap_impl!(self.list: ListView<VerifiedPlayable>);
 }
 
 impl ViewExt for QueueView {
