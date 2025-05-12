@@ -13,6 +13,7 @@ use crate::library::Library;
 use crate::model::playable::Playable;
 use crate::spotify::PlayerEvent;
 use crate::spotify::Spotify;
+use crate::traits::ListItem;
 
 /// Repeat behavior for the [Queue].
 #[derive(Display, Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -33,8 +34,9 @@ pub enum QueueEvent {
     PreloadTrackRequest,
 }
 
+// TODO: MAKE queue private in order to enforce then invariant properly
 /// The queue determines the playback order of [Playable] items, and is also used to control
-/// playback itself.
+/// playback itself. Enforces the invariant that [Playable]s item are playable.
 pub struct Queue {
     /// The internal data, which doesn't change with shuffle or repeat. This is
     /// the raw data only.
@@ -113,8 +115,14 @@ impl Queue {
 
     /// The currently playing item from `self.queue`.
     pub fn get_current(&self) -> Option<Playable> {
-        self.get_current_index()
-            .map(|index| self.queue.read().unwrap()[index].clone())
+        let result = self.get_current_index()
+            .map(|index| self.queue.read().unwrap()[index].clone());
+        #[cfg(debug_assertions)]
+        if let Some(ref track) = result {
+            debug_assert!(track.is_playable(), 
+                    "Queue invariant violated: track {} is not playable", track);
+        }
+        result
     }
 
     /// The index of the currently playing item from `self.queue`.
@@ -123,8 +131,13 @@ impl Queue {
     }
 
     /// Insert `track` as the item that should logically follow the currently
-    /// playing item, taking into account shuffle status.
+    /// playing item, taking into account shuffle status. `track` is only
+    /// inserted if it is playable, otherwise it is dropped.
     pub fn insert_after_current(&self, track: Playable) {
+        if !track.is_playable() {
+            log::debug!("Not adding unplayable track to queue {}", track);
+            return;
+        }
         if let Some(index) = self.get_current_index() {
             let mut random_order = self.random_order.write().unwrap();
             if let Some(order) = random_order.as_mut() {
@@ -145,8 +158,13 @@ impl Queue {
         }
     }
 
-    /// Add `track` to the end of the queue.
+    /// Add `track` to the end of the queue, if it is playable. Otherwise
+    /// it is dropped.
     pub fn append(&self, track: Playable) {
+        if !track.is_playable() {
+            log::debug!("Not adding unplayable track to queue {}", track);
+            return;
+        }
         let mut random_order = self.random_order.write().unwrap();
         if let Some(order) = random_order.as_mut() {
             let index = order.len().saturating_sub(1);
@@ -159,6 +177,7 @@ impl Queue {
 
     /// Append `tracks` after the currently playing item, taking into account
     /// shuffle status. Returns the first index(in `self.queue`) of added items.
+    /// Items in `tracks` which are not playable are not added to the queue.
     pub fn append_next(&self, tracks: &Vec<Playable>) -> usize {
         let mut q = self.queue.write().unwrap();
 
@@ -176,6 +195,10 @@ impl Queue {
 
         let mut i = first;
         for track in tracks {
+            if !track.is_playable() {
+                log::debug!("Not adding unplayable track to queue {}", track);
+                continue;
+            }
             q.insert(i, track.clone());
             i += 1;
         }
@@ -286,6 +309,8 @@ impl Queue {
         }
 
         if let Some(track) = &self.queue.read().unwrap().get(index) {
+            debug_assert!(track.is_playable(), 
+                "Queue invariant violated: track {:?} is not playable", track);
             self.spotify.load(track, true, 0);
             let mut current = self.current_track.write().unwrap();
             current.replace(index);
